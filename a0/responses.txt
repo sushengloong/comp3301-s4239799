@@ -1,0 +1,148 @@
+----------------------Su Sheng Loong 42397997 Assignment 0----------------------
+
+1. 
+
+Introduction:
+getdents(2) is a lower-level function which reads directory entries without 
+performing any significant manipulation (Linux Kernel Organization, 
+Inc., 2009a). scandir(3) is a higher-level function whereby the programmer can
+retrieve relevant directory entries in preferred sorting order by specifying 
+filter and sorting criteria (Linux Kernel Organization, Inc., 2009b).  
+
+Portability:
+scandir(3) library call is more portable than getdents(2) system call. This 
+is because system calls are platform-dependent and library functions abstract 
+the routines by wrapping one or several system calls in one library function 
+(Linux Kernel Organization, Inc., 2010a). This is to increase the portability 
+of libraries. Plus, the libary function definitions are standardized by a 
+document while the implementations may vary on different platforms. 
+
+Safety:
+It is also safer to use scandir(3) instead of getdents(2) because scandir(3) 
+circumvents the need of dealing with lower-level programming such as using 
+open() system call to create file descriptor which could be dangerous if not 
+handled correctly (Salzman et al., 2007). Making system call directly is 
+potentially dangerous because the routines will execute in the kernel-space.
+
+Ease of use:
+scandir(3) is easier to use compared to getdents(2). This argument is justified 
+by the description of getdents(2) in the Linux Programmer's manual (Linux 
+Kernel Organization, Inc., 2009a) in which the author advises the readers to 
+check out readdir(3) instead, which is also another library function like 
+scandir(3). A valid reason is scandir(3) accepts and populates the data in a 
+structure of pointer to strings which make it easier for the user to iterate 
+through the directory entries. In addition, it is also easier to obtain 
+relevant and sorted entries by using scandir(3).
+
+--------------------------------------------------------------------------------
+
+2. 
+
+The process firstly needs to retrieve the user ID and group ID from the source 
+file. This can be done by accessing the variables of the data structure 
+populated by stat(2), ie st_uid and st_gid (Linux Kernel Organization, Inc., 
+2009a). The process then needs to set the effective user ID and effective group 
+ID to the two values by using the two system calls - setuid(2) and setgid(2). 
+After that the process can then proceed to the usual file copying procedure. 
+The 'O_Create' flag passed into the open(2) method will ensure that the new 
+file will be created with the owner user ID and group ID set to the 
+corresponding effective user ID and effective group ID of the process (Linux 
+Kernel Organization, Inc. ,2010b). 
+
+--------------------------------------------------------------------------------
+
+3. 
+
+function rm(dirpath)
+    open dirpath and get fd
+    lstat dirpath and populate a stat struct
+    check file type of the file
+    if the file is regular file
+        unlink the file
+    else if the file is directory
+        initialize buffer, buffer pointer and directory entry struct pointer
+        getdents
+        loop through the directory entries 
+            string manipulation needed for forming entry path 
+            lstat entry path and populate the stat struct
+            check the file type of the entry
+            if the entry is regular file
+                unlink the entry
+            else
+                /* recursively call the function if the entry is a directory*/
+                rm(path to this entry) 
+        /* remove the directory when it is empty */
+        rmdir(dirpath)
+    close fd
+    return
+
+This is a simplied version of pseudocode assuming all path mentioned in the 
+code are absolute path or relative path to the file in the same directory. The 
+procedures for converting relative path to absolute path and handling errors 
+are ommitted. Though the actual code can be found in the source code of the 
+assignment solution.
+
+--------------------------------------------------------------------------------
+
+4. 
+
+/* 
+ * sourcepath is a pointer to source file path
+ * destpath is a pointer to destination file path
+ * For abbreviations, src means source and dest means destionation
+ */
+function cp(srcpath, destpath)
+    declare buffer, stat struct, srcfd, destfd variables
+    open srcpath and assign value returned to srcfd
+    if srcpath is not pointing to regular file
+        return
+    /* open destpath with O_WRONLY|O_CREAT|O_TRUNC flag */
+    open destpath and assign value returned to destfd
+    check dest file type by using stat system call
+    if dest file is a directory
+        extract src file name from the srcpath
+        newdestpath = strcat(destpath, src file name)
+        /* 
+         * Call the function recursively by passing in the source path and the 
+         * new destination path
+         */
+        cp(srcpath, newdestpath)
+    else
+        declare buffer pointer
+        loop through buffer read from the source file
+            write the buffer to the dest file
+    close src fd
+    close dest fd
+    return
+
+Once again, string manipulations and error handlings are ommited. 
+
+--------------------------------------------------------------------------------
+
+Reference:
+Linux Kernel Organization, Inc. (2009a). getdents(2). Linux Programmer's Manual.   
+    Retrieved 9 August 2010, from 
+    http://www.kernel.org/doc/man-pages/online/pages/man2/getdents.2.html  
+
+Linux Kernel Organization, Inc. (2009b). scandir(3). Linux Programmer's Manual.   
+    Retrieved 9 August 2010, from 
+    http://www.kernel.org/doc/man-pages/online/pages/man3/scandir.3.html
+
+Linux Kernel Organization, Inc. (2009c). stat(2). Linux Programmer's Manual.   
+    Retrieved 9 August 2010, from 
+    http://www.kernel.org/doc/man-pages/online/pages/man2/stat.2.html
+
+Linux Kernel Organization, Inc. (2010a). intro(3). Linux Programmer's Manual.   
+    Retrieved 9 August 2010, from 
+    http://www.kernel.org/doc/man-pages/online/pages/man3/intro.3.html
+
+Linux Kernel Organization, Inc. (2010b). open(2). Linux Programmer's Manual.   
+    Retrieved 9 August 2010, from 
+    http://www.kernel.org/doc/man-pages/online/pages/man2/open.2.html
+
+Salzman P. J., Burian M., Pomerantz O. (2007). System Calls. The Linux Kernel 
+    Module Programming Guide. Retrieved 9 August 2010, from
+    http://tldp.org/LDP/lkmpg/2.4/html/x939.html
+    Retrived  
+
+------------------------------------EOF-----------------------------------------

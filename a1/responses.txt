@@ -1,0 +1,82 @@
+SU Sheng Loong (42397997)
+TEE Lip Jian (42430942)
+
+1.
+No, because cooperative threading model is not preemptive. In other words,
+the resource will be occupied by the executing thread until its completion
+or it is blocked on I/O or it voluntarily yields the resource. If there is 
+at least a greedy thread which occupies the process throughout the 
+entire or most of the process execution time, the fairness cannot be
+guaranteed.
+ 
+2.
+The system always takes the approximately cummulative actual runtime of
+the entire process to converge to an approximately stable state. 
+This can be improved by changing how the actual CPU usage is calculated.
+Our implementation uses lifetime of the thread in the process to calculate
+the actual CPU usage so that it does not matter when the thread is spawned 
+and when it finishes execution. However, by changing the formula such that
+the denominator is the process lifetime, the number of tickets distributed 
+among the threads will have smaller difference. Hence, the system will
+be able to converge to the approximately stability state much faster. 
+
+3.
+No because the greedy threads will still have chance to be selected to run 
+next. As long as at least a ticket is allocated to greedy threads, there is 
+always chance for the greedy threads to be scheduled to run next since the 
+lottery number is generated on random basis. The policy can never ensure that
+no greedy thread holds the winning ticket.
+
+The algorithm can be improved by adding an additional algorithm to further 
+penalise the greedy threads. Any thread found greedy - having negative 
+err (target CPU runtime minus actual CPU runtime) value at the moment - will 
+not be allocated any ticket. This can ensure that the greedy threads can 
+never be selected since these threads do not hold any single ticket.
+
+This algorithm seems to starve the greedy threads, if these threads are never
+given any ticket throughout the process execution. However, this issue
+is very unlikely because as time passes the greedy threads will be able to
+improve their err values and eventually will be allocated tickets again
+once the err values become positive values.    
+
+4.
+The target CPU usage will have to be recalculated after each thread execution
+cycle.This is different from the original implementation whereby the 
+calculation is done only once since all threads are assumed to be created
+at the start. Recalculation of target CPU usage in every thread execution 
+cycle is to ensure fairness among the threads since the number of threads 
+can change from time to time.
+
+On the other hand, it is crucial to keep updating the actual CPU usage of all 
+the threads in every thread execution cycle. Starvation among the threads 
+can be prevented by calculating actual CPU usage from the actual lifetime 
+of the thread itself, rather than how long the process has run. In this 
+case, a thread which finishes execution before the entire process 
+terminates will have an accurate actual CPU usage. This benefit also 
+applies to new threads which are created after the others since the actual 
+CPU usage of these new threads are calculated based on how long each of 
+these threads have stayed in the process, rather than how long the process 
+has run. 
+
+A concern about this implementation is the existing threads might starve since 
+the new threads will have higher err value and thus receive more tickets.
+However, in our implementation, this issue is not very likely since we 
+are updating the target CPU usage and actual CPU usage in each of every 
+thread execution cycle. By having this implmentation, the exisiting threads
+can improve their err value over time and evantually be able to be selected. 
+
+in the endless scheduler loop
+	while there is new thread in pth
+		insert into pth_RQ
+	/* calculate target CPU usage */
+	pth_pqueue_calc_target(&pth_RQ)
+	pth_pqueue_issue_tk(&pth_RQ)
+	generate lottery number
+	pth_current = thread with winning number removed from pth_RQ
+	/* run pth_current */
+	/* several accounting steps are done here */
+	/* calculate and update actual CPU usage */
+	pth_pqueue_update_a_rt(&pth_RQ) 
+	/* several code for dealing with signals and stack overflow*/
+	move pth_current to the appropriate queue (RQ or WQ or DQ)
+---END---

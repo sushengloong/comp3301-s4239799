@@ -1,0 +1,147 @@
+SU Sheng Loong (42397997)
+TEE Lip Jian (42430942)
+
+---BEGIN---
+
+1. 
+While the read/write funtions faciliate basic data transfer, ioctl is needed
+for performing more operations which cannot be done with the simple
+read/write functions. Some of the operations include ejecting device media,
+locking device, setting window size, etc. When the ioctl system call is 
+invoked by the userspace application, the magic number (command code) and any
+associating arguments will be passed into the kernel space which will be
+used by the device driver to determine what ioctl operation to perform. 
+
+2.
+The function kmalloc allocates memory space that are contiguous in the physical
+memory. On the other hand, vmalloc allocates virtual memory space which are 
+not contiguous in the physical memory.
+
+Therefore, kmalloc might have problem trying to allocate free space because it
+has to locate contiguous free memory space in the physical memory. kmalloc
+can fail if the contiguous memory space of the size specified cannot be
+found. vmalloc does not have this problem as it allows memory allocated
+to be discontinuous in the physical memory.
+
+In the device mmap function, it is required to convert the memory address
+allocated by vmalloc to physical address before passing the address
+into the function which builds the page table for the virtual address range. 
+Therefore, implementation of mmap function would be easier with the memory
+space allocated by kmalloc.
+
+3.
+The fork and dup family of system calls duplicate file descriptors which are
+still associated with the same files as the original file descriptors.
+
+In our implementation, the device driver only cares about the file descriptors 
+which have opened it. Therefore, parent and child process may share the same 
+attached buffer with the inherited file descriptor. 
+
+This also applies to the buffer reference counting. Since the buffer 
+reference counting mechanism only cares about the number of file descriptors
+attached to a particular buffer, the duplicated file descriptors can share
+the attached buffer. This also means that parent and child process with
+the same file descriptor attached to a particular buffer would only be 
+counted once for the reference counting. 
+
+Likewise, when one file descriptor closes the device, all other duplicated
+or inherited file descriptors will no longer have access to the device
+until the next device open, if any.  
+
+4.
+Generally, when a process issues read or write system call, the driver is
+acting like a intermediary between the process and the hardware encryption
+device. The driver needs to allocate a dedicated DMA buffer and then make 
+DMA request to the device. The process is put to sleep and the CPU 
+delegates the data transfer to the DMA controller. As usual, an interrupt
+will be issued after the data transfer between the DMA buffer and the device 
+is completed. The interrupt service routine will perform some necessary
+procedures and then the process will be active and the data is now available
+for the process. These procedures can be achieved by making use of some
+functions provided in the DMA API which requires the driver to include
+linux/dma-mapping.h header file.
+
+It is important to notice the differences among the address types used before
+makeing a DMA request. If the bus architecture to which the device is connected
+uses physical addresses (or bus addresses), the DMA buffer allocated cannot
+be virtual memory. There are functions available for converting virtual
+addresses to bus addresses and vice versa such as virt_to_bus and bus_to_virt
+but these functions might have problem when there is an I/O MMU to be 
+programmed. A generic DMA layer is thus needed for DMA mappings. 
+
+Another issue is cache coherency. Since the CPU has a cache for storing
+recently accessed data, changes made to the data in the main memory by the 
+device or changes made to the cache have to be made consistent. Once again,
+the generic DMA layer is able to ensure the cache coherency is managed.
+
+During the initialisation, the device driver should set up the generic
+DMA layer and create DMA mappings. The following pseudocode shows
+the additional steps to be performed in the init function.
+
+if (dma_set_mask (dev, 0xffffff))
+	dev->use_dma = 1;
+else {
+	dev->use_dma = 0; 
+	printk (KERN_WARN, "DMA is not supported\n");
+}
+
+For mappings, there are two options, namely coherent DMA mappings or streaming
+DMA mappings. In this case, we choose to use streaming DMA mapping.
+
+read call:
+static ssize_t device_read(struct file *filp, char *buf, size_t len,
+				loff_t *off)
+{
+	/* Process for retriveing the targeted buffer struct
+	 * given the buffer id is not described here
+	 * but the code is identical to the original device_read
+	 * implemented in the source file.
+	 */
+	struct dev_buf *this_buf = search(id, entry);
+	/* Assuming no wraparound issue, though the process for 
+	 * handling wraparound buffer is implemnted in the source file
+	 */
+	dma_addr_t dev_dma_addr;
+	/* Map the buffer for DMA */
+	dev->dma_dir=(write? DMA_TO_DEVICE: DMA_FROM_DEVICE);
+	dev->dma_size = count;
+	bus_addr = dma_map_single(&dev->dev,buffer,count,dev->dma_dir);
+	dev->dma_addr = bus_addr;
+	/* Set up the device */
+	/* Start the operation */
+	/* pass the buffer address to the device */
+	/* device would pass the processed buffer to the userspace*/	
+}
+
+
+write call:
+static ssize_t device_write(struct file *filp, char *buf, size_t len,
+				loff_t *off)
+{
+	/* Process for retriveing the targeted buffer struct
+	 * given the buffer id is not described here
+	 * but the code is identical to the original device_read
+	 * implemented in the source file.
+	 */
+	struct dev_buf *this_buf = search(id, entry);
+	/* Assuming no wraparound issue, though the process for 
+	 * handling wraparound buffer is implemnted in the source file
+	 */
+	dma_addr_t dev_dma_addr;
+	/* Map the buffer for DMA */
+	dev->dma_dir=(write? DMA_TO_DEVICE: DMA_FROM_DEVICE);
+	dev->dma_size = count;
+	bus_addr = dma_map_single(&dev->dev,buffer,count,dev->dma_dir);
+	dev->dma_addr = bus_addr;
+	/* Set up the device */
+	/* Start the operation */
+	/* convert the userspace address to kernel space address */
+	dma_addr_t user_add = dma_map_page(struct device *dev, 
+		struct page *page,
+		unsigned long offset, size_t size,
+		enum dma_data_direction direction);	
+	/* pass the userspace buffer address to the device */
+	/* userspace writes the data to the device */
+	/* device sends encrypted/decrypted text to the driver */
+}    
+---END---

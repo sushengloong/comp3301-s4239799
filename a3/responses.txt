@@ -1,0 +1,92 @@
+---BEGIN---
+
+1.
+a) 
+Reading from /foo can read the decrypted text from /encrypt/foobar. Reading 
+from /encrypt/foobar firstly decrypts the cipher text stored in the inode
+(for immediate file)/data block(for regular file) and then copy the decrypted 
+text to the user space program. For instance, initially "helloworld123" was 
+written to /encrypt/foobar, reading from /foo yielded "helloworld123" as well.
+The reason is because the path to /encrypt/foobar was stored in /foo.
+When /foo was read, the path stored would be read and then the reference would 
+be translated automatically into a reference to /encrypt/foobar.     
+
+b)
+Reading from /encrypt/foo can read the text stored in /foobar. Reading 
+from /encrypt/foo firstly retrived the pathname stored in the inode 
+(filename less than 60 characters) and then translated to the /foobar.
+For instance, initially "abcdefg" was written to /foobar, reading from 
+/encrypt/foo yielded "abcdefg" as well. The reason is encryption only
+applies to immediate and regular files within /encrypt.     
+
+2.
+a)
+Reading from /foo retrieves the cipher text stored in /encrypt/foobar. This is 
+because the hard link is pointing to the same inode. When reading from
+/foo, the cipher text was not decrypted because the directory entry
+was not in /encrypt directory. In our implementation, encryption/
+decryption will be performed only when the directory entry is in
+/encrypt directory.  
+
+b)
+Reading from /encrypt/foo decrypts the unencrypted data stored in /foo. 
+This is because the the hard link file exists in /encrypt directory and 
+therefore decryption would be performed when reading.
+
+c)
+Hard link cannot be created across different file system. When creating a
+hard link from ~/foo to /mnt/ext3301/encrypt/foobar, the following 
+message appeared and the hard link creation failed.
+
+ln: creating hard link `foo' => `/mnt/ext3301/encrypt/foobar': Invalid cross-device link
+
+This is regardless of our implementation since by default hard link cannot
+be created across different filesystems. This is a limitation of the 
+unix-like operating systems.
+
+3.
+a)
+When option -vf was used with e2fsck, all regular files had no problem. 
+Checking for files was successful. This is because the file type and 
+inode mode were set properly during either file creation or conversion
+from immediate files.
+
+b)
+For the encrypted regular files, same as the previous result. No error or 
+problem occured associated with the file type and inode mode. However, as 
+for the encrypted immediate files, both file type(was 8, should be 0) and 
+inode mode(0160644) were said to be faulty or invalid. This could be due
+to the fact that e2fsck cannot recognise immediate file type and inode mode.   
+
+c)
+When option -vf was used with e2fsck, all immediate files were said to have 
+incorrect filetype (was 8, should be 0). The corresponding inodes on the other
+hand were said to have invalid mode (0160644). The reason is e2fsck does not
+recognise immediate file type and therefore are deemed as having incorrect 
+filetype. Likewise, the inode mode was not recognised by e2fsck. 
+
+4.
+/* This function only handles overwrite to a file and has total written length less or equals to 60 bytes
+ * The function will first deallocates all the allocated data blocks and memset it to 0, then convert
+ * the block pointer to unsigned char * to immediately stores the data. Lastly, the inode's i_mode will
+ * be marked as immediate file type and returned.
+ */ 
+function write_truncate(struct file * filp, const char __user * buf, size_tlen, loff_t * ppos) 
+{
+    struct inode *inode = filp->f_dentry->d_inode;
+    struct ext2_inode_info *ei = EXT2_I(inode);
+    unsigned char *data;
+    ssize_t ret = 0;
+    if ( len + *ppos <= 60) {
+        for i to inode->i_blocks:
+            deallocate ei->i_data[i] data block;
+        memset ei->i_data to 0;    
+        data = (unsigned char *)ei->data;
+        memcpy(data, buf, len);
+        ret = len; 
+        inode->i_mode = S_ISIM | (inode->i_mode ^ S_IFREG);
+    }
+    return ret;
+
+}        
+---END---
